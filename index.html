@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Afinador Web Simple</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #afinador {
+            text-align: center;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        #frecuencia {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+        #nota {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        button {
+            font-size: 18px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="afinador">
+        <div id="frecuencia">Frecuencia: - Hz</div>
+        <div id="nota">-</div>
+        <button id="iniciar">Iniciar Afinador</button>
+    </div>
+
+    <script>
+        const frecuenciaElement = document.getElementById('frecuencia');
+        const notaElement = document.getElementById('nota');
+        const botonIniciar = document.getElementById('iniciar');
+
+        let audioContext;
+        let analyser;
+        let mediaStream;
+
+        const notas = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        function obtenerNota(frecuencia) {
+            const numeroNota = 12 * (Math.log2(frecuencia / 440) + 4);
+            return notas[Math.round(numeroNota) % 12];
+        }
+
+        function actualizarAfinador() {
+            analyser.getFloatTimeDomainData(timeDomainData);
+            const pitch = detectPitch(timeDomainData, audioContext.sampleRate);
+            
+            if (pitch !== -1) {
+                frecuenciaElement.textContent = `Frecuencia: ${pitch.toFixed(2)} Hz`;
+                notaElement.textContent = obtenerNota(pitch);
+            } else {
+                frecuenciaElement.textContent = 'Frecuencia: - Hz';
+                notaElement.textContent = '-';
+            }
+
+            requestAnimationFrame(actualizarAfinador);
+        }
+
+        function detectPitch(buffer, sampleRate) {
+            const correlations = new Array(buffer.length).fill(0);
+            for (let i = 0; i < buffer.length; i++) {
+                for (let j = 0; j < buffer.length - i; j++) {
+                    correlations[i] += buffer[j] * buffer[j + i];
+                }
+            }
+
+            const peakIndex = correlations.indexOf(Math.max(...correlations.slice(1)));
+            return peakIndex > 0 ? sampleRate / peakIndex : -1;
+        }
+
+        botonIniciar.addEventListener('click', async () => {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 2048;
+
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                source.connect(analyser);
+
+                const bufferLength = analyser.frequencyBinCount;
+                window.timeDomainData = new Float32Array(bufferLength);
+
+                actualizarAfinador();
+                botonIniciar.disabled = true;
+                botonIniciar.textContent = 'Afinador Activo';
+            } catch (error) {
+                console.error('Error al acceder al micrófono:', error);
+                alert('No se pudo acceder al micrófono. Por favor, asegúrate de que tienes un micrófono conectado y has dado permiso para usarlo.');
+            }
+        });
+    </script>
+</body>
+</html>
